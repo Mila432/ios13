@@ -8,3 +8,10 @@ as of writing, checkra1n beta 0.9.5 is not working with this specific iPad. A wo
 ![](https://i.imgur.com/TUkxoGo.png)
 
 # debugserver on iOS 13
+in order to run debugserver on iOS 13 and being able to attach or launch any process, you need to follow those steps: 
+
+on your mac run `security find-identity -v -p codesigning` and copy whatever is shown there `"iPhone Developer: Mila432 (...)"`
+
+download the `ent.xml` file from scripts and run `codesign --force --sign "iPhone Developer: Mila432 (...)" --entitlements ent.xml -f debugserver`
+
+now copy debugserver to your device `/usr/bin/`
