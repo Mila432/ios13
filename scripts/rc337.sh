@@ -1,13 +1,13 @@
 #!/bin/sh
 #
-# Rasticrac v3.3.7 (march 2018)
+# Rasticrac v3.3.8 (april 2018)
 #
 # Rapid Advanced Secure Thorough Intelligent Gaulish Nuclear Acclaimed Cracker
 # Rapide Avancé Securisé Tout-terrain Intelligent Gaulois Nucléaire Approfondi Craqueur
 #
 # Home/Help/Donate/News: https://twitter.com/iRastignac
 #
-
+#set -x
 
 # ======
 # Please, customize the script first!
@@ -84,7 +84,7 @@ RCxxx="====="
 RCsss="-----"
 
 # Various
-readonly RCversion="337"
+readonly RCversion="338"
 readonly cami="/var/mobile/Library/Caches/com.apple.mobile.installation.plist"
 readonly cali="/private/var/db/lsd/com.apple.lsdidentifiers.plist"
 readonly sbis="/private/var/mobile/Library/SpringBoard/IconState.plist"
@@ -96,6 +96,8 @@ readonly RooRoo="/private/var/tmp/RCtemp"
 RCinaGUI="NEVER"
 # DEBUG ONLY: - Check only (all tested but Ipa not created)
 RCcheck="NEVER"
+# DEBUG ONLY: - Eleven Mode
+RCeleven="NEVER"
 
 # Thanks you for testing.
 # ======
@@ -866,6 +868,12 @@ fi
 for j in 64 11 9 6
 do
 	WhichPart=${PartIndex[$j]}
+
+	if [ $CPUType = "64" -a $j != 64 -a $RCeleven = "YES" -a $WhichPart != 0 ]; then
+		echo "Note: part #$j is skipped by Eleven Mode"
+		WhichPart=0
+	fi
+
 	if [ $WhichPart = 0 ]; then
 		if [ "$DebugMode" = "YES" ]; then
 			echo "- No 'type $j' part found"
@@ -1492,11 +1500,13 @@ if [ ! "$AppShortVer" = "" ]; then
 		AppVer="$AppShortVer v$AppVer"
 	fi
 fi
-MinOS=$(plutil -key MinimumOSVersion "$tempLoc/Info.plist" 2> /dev/null | tr -d ".")
-if [ "$MinOS" = "" ]; then
+MinOSfull=$(plutil -key MinimumOSVersion "$tempLoc/Info.plist" 2> /dev/null)
+if [ "$MinOSfull" = "" ]; then
 	echo "${Meter7}${escYellow}$MsgWarning:${escReset} unable to get MinOS"
-	MinOS="000"
+	MinOSfull="0.0.0"
 fi
+MinOSmajor=$(echo "$MinOSfull" | cut -f 1 -d '.')
+MinOS=$(echo "$MinOSfull" | tr -d '.')
 
 # Flags in ipa's name
 Patched=""
@@ -1621,11 +1631,11 @@ if [ -d "$AppPath/$AppName/Frameworks" ]; then
 		do
 			ShortPlug="$( echo "$OnePlug" | sed -e "s:$AppPath/$AppName/::g" )"
 			echo "Preparing \"$ShortPlug\"..."
-			if [ ! -d "$OnePlug/SC_Info" ]; then
-				echo "SC_Info ERROR"
-				rm -fr "$WorkDir"
-				return 1
-			fi
+			#if [ ! -d "$OnePlug/SC_Info" ]; then
+			#	echo "SC_Info ERROR"
+			#	rm -fr "$WorkDir"
+			#	return 1
+			#fi
 			if [ ! -e "$OnePlug/Info.plist" ]; then
 				echo "Info.plist ERROR"
 				rm -fr "$WorkDir"
@@ -1773,6 +1783,17 @@ echo "Payload/Library" >> $tempexcl
 echo "Payload/tmp/*" >> $tempexcl
 echo "Payload/tmp" >> $tempexcl
 
+# ElevenMode needs to push upto 'iOS11'
+if [ $RCeleven = "YES" ]; then
+	if [ $MinOSmajor -lt 11 ]; then
+		echo "${Meter8}${escYellow}ElevenMode:${escReset} app was 'iOS$MinOSfull'"
+		echo "${Meter8}${escYellow}ElevenMode:${escReset} app is now 'iOS11 only'"
+		plutil -key MinimumOSVersion -value "11.0" "$WorkDir/$AppName/Info.plist" 2>&1> /dev/null
+		MinOS="11"
+	fi
+	ExtrasAslr="$ExtrasAslr ELEVEN"
+fi
+
 # Never use a pipe for the "while" loop! Use a temp file instead
 templsd=$(mktemp)
 # Then, do all the Frameworks!
@@ -1781,11 +1802,11 @@ while read OnePlug
 do
 	ShortPlug="$( echo "$OnePlug" | sed -e "s:$AppPath/$AppName/::g" )"
 	echo "Trying to do \"$ShortPlug\"..."
-	if [ ! -d "$OnePlug/SC_Info" ]; then
-		echo "SC_Info ERROR"
-		rm -fr "$WorkDir"
-		return 1
-	fi
+	#if [ ! -d "$OnePlug/SC_Info" ]; then
+	#	echo "SC_Info ERROR"
+	#	rm -fr "$WorkDir"
+	#	return 1
+	#fi
 	if [ ! -e "$OnePlug/Info.plist" ]; then
 		echo "Info.plist ERROR"
 		rm -fr "$WorkDir"
@@ -2034,21 +2055,25 @@ fi
 # Building ipa's filename, adding AppVersion and MinOsVersion, adding CrackerName
 if [ "$CrackerName" = "Anonymous" ]; then
 	CrackedBy=""
-	ZipComment="On iOS$iOSver with Rasticrac v$RCversion ($DayToday) $Patched"
+	ZipComment="On iOS$iOSver/$CPUType with Rasticrac v$RCversion ($DayToday) $Patched"
 else
 	CrackedBy="-$CrackerName"
-	ZipComment="From $CrackerName on iOS$iOSver with Rasticrac v$RCversion ($DayToday) $Patched"
+	ZipComment="From $CrackerName on iOS$iOSver/$CPUType with Rasticrac v$RCversion ($DayToday) $Patched"
 fi
 
-# ZipComment can't be added inside ".zip'scomment" anymore (recent iOSes block when installation is done from iTunes)
+if [ $RCeleven = "YES" ]; then
+	ZipComment="$ZipComment ELEVENMODE"
+fi
+
+# ZipComment can't be added inside ".zip's comment" anymore (recent iOSes block when installation is done from iTunes)
 echo -n "$ZipComment"  > "$WorkDir/.ZipComment"
 touch -r "$AppPath/$AppName/Info.plist" "$WorkDir/.ZipComment"
 
 # Cutting too long app name
 AppDisplayName=${AppDisplayName:0:150}
 
- IPAName="$NewAppDir/$Heidi$AppDisplayName (v$AppVer$Extras$Patched os$MinOS)$CrackedBy.rc${RCversion}_$iOSver.ipa"
-#IPAName="$NewAppDir/$Heidi$(echo -n "$AppDisplayName" | tr " " ".")-v$AppVer$CrackedBy.rc${RCversion}_$iOSver.ipa"
+ IPAName="$NewAppDir/$Heidi$AppDisplayName (v$AppVer$Extras$Patched os$MinOS)$CrackedBy.rc${RCversion}_${iOSver}_$CPUType.ipa"
+#IPAName="$NewAppDir/$Heidi$(echo -n "$AppDisplayName" | tr " " ".")-v$AppVer$CrackedBy.rc${RCversion}_${iOSver}_$CPUType.ipa"
 
 # When RemoteMode, remember the real ipa's filename and use generic name instead.
 if [ "$RCremote" = "YES" ]; then
@@ -2307,7 +2332,7 @@ else
 	done
 fi
 
-echo "${Meter0}*** ${escUnder}Rasticrac v3.3.7${escReset} ***"
+echo "${Meter0}*** ${escUnder}Rasticrac v3.3.8${escReset} ***"
 
 if [ ! -e /usr/bin/basename ]; then
 	echo "$MsgCntFind 'basename'. $MsgInsCydi: 'BigBoss Recommanded Tools'"
@@ -2357,14 +2382,26 @@ fi
 
 # iDevice's type of CPU
 CPUGenre=$(sysctl hw.cputype | awk '{print $2}')
+if [ $? != 0 ]; then
+	echo "Fatal 'sysctl' error!"
+	exit 1
+fi
 CPUType=$(sysctl hw.cpusubtype | awk '{print $2}')
 
 # iDevice's iOS version
 iOSver=$(plutil -key ProductVersion /System/Library/CoreServices/SystemVersion.plist 2> /dev/null)
+if [ $? != 0 ]; then
+	echo "Fatal 'plutil' error!"
+	exit 1
+fi
 iOSmajor=$(echo "$iOSver" | cut -f 1 -d '.')
 iOSver=$(echo "$iOSver" | tr -d ".")
 if [ "$DebugMode" = "YES" ]; then
 	echo "${Meter1}${escYellow}Note:${escReset} running iOS$iOSver on '$CPUType@$CPUGenre' cpu on $(sysctl hw.machine | awk '{print $2}')"
+fi
+if [ -z "$iOSver" -o -z "$iOSmajor" ]; then
+	echo "The 'plutil' tool gave empty answers!"
+	exit 1
 fi
 
 # Old 'otool' fails with 64bits. We need the fresh one
@@ -2376,6 +2413,11 @@ if [ $iOSmajor -gt 5 ]; then
 	fi
 fi
 
+# If iOS11+, force Eleven Mode
+if [ $iOSmajor -gt 10 ]; then
+	echo "${escGreen}FYI:${escReset} Eleven Mode is mandatory for iOS$iOSmajor"
+	RCeleven="YES"
+fi
 # Convert compatible CpuType
 if [ $CPUType = "10" ]; then
 	CPUType="9"
@@ -2390,7 +2432,7 @@ if [ $CPUType != "6" -a $CPUType != "9" -a $CPUType != "11" -a $CPUType != "64" 
 	exit 1
 fi
 
-# We use 'ldid' (no more 'ldone')
+# We use 'ldid' only (no more 'ldone')
 if [ ! -e /usr/bin/ldid ]; then
 	echo "$MsgCntFind 'ldid'. $MsgInsCydi: 'Link Identity Editor'"
 	exit 1
@@ -2576,6 +2618,16 @@ do
 		LoopExit="NO"
 	fi
 
+	# Stupid "Eleven Mode" flag
+	if [ "$1" = "-eleven" ]; then
+		shift
+		if [ $CPUType != "64" ]; then
+			echo "${escYellow}Note:${escReset} Eleven Mode forbidden on non-64bits iDevice!"
+		else
+			RCeleven="YES"
+		fi
+		LoopExit="NO"
+	fi
 	# Secret "LamerPatcher Off" flag
 	if [ "$1" = "-lpoff" ]; then
 		shift
@@ -2834,7 +2886,7 @@ if [ ! $RCinaGUI = "YES" ]; then
 				if [ -e /tmp/lsddisp.tmp ]; then
 					echo
 					clear
-					echo "*** ${escUnder}Rasticrac v3.3.7 menu${escReset} ***"
+					echo "*** ${escUnder}Rasticrac v3.3.8 menu${escReset} ***"
 					cat /tmp/lsddisp.tmp
 					rm -f /tmp/lsddisp.tmp
 					echo
@@ -2969,5 +3021,6 @@ rm -f $lsd
 # Thanks.
 # Merci.
 # Hontoni arigato.
+# This is the end, my only friend, the end.
 #
 
