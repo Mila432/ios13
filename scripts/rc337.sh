@@ -1146,14 +1146,26 @@ do
 
 			fi
 
-			# Signing the application with 'ldid' (no more 'ldone', sorry)
-			if [ $RCverbose = "YES" ]; then
-				echo "${Meter35}$MsgSgnAppl (ldid)"
-			fi
-			foo=$(ldid -s "$DeepWorkDir/$DeepAppName/DumpedPart${PartType[$WhichPart]}" 2>&1> /dev/null)
-			if [ "$?" != "0" ]; then
-				echo "${escRed}STOP!${escReset} 'ldid' failed!"
-				return 1
+			if [ $CPUType = "64" -a $j = 64 -a $RCeleven = "YES" ]; then
+				# Signing the application with 'RastLdid' (to get sha256 signature)
+				if [ $RCverbose = "YES" ]; then
+					echo "${Meter35}$MsgSgnAppl (RastLdid)"
+				fi
+				foo=$(RastLdid -s "$DeepWorkDir/$DeepAppName/DumpedPart${PartType[$WhichPart]}" 2>&1> /dev/null)
+				if [ "$?" != "0" ]; then
+					echo "${escRed}STOP!${escReset} 'RastLdid' failed!"
+					return 1
+				fi
+			else
+				# Signing the application with 'ldid' (no more 'ldone', sorry)
+				if [ $RCverbose = "YES" ]; then
+					echo "${Meter35}$MsgSgnAppl (ldid)"
+				fi
+				foo=$(ldid -s "$DeepWorkDir/$DeepAppName/DumpedPart${PartType[$WhichPart]}" 2>&1> /dev/null)
+				if [ "$?" != "0" ]; then
+					echo "${escRed}STOP!${escReset} 'ldid' failed!"
+					return 1
+				fi
 			fi
 			
 			# Back to previous filenames (ready for next part)
@@ -1631,11 +1643,11 @@ if [ -d "$AppPath/$AppName/Frameworks" ]; then
 		do
 			ShortPlug="$( echo "$OnePlug" | sed -e "s:$AppPath/$AppName/::g" )"
 			echo "Preparing \"$ShortPlug\"..."
-			#if [ ! -d "$OnePlug/SC_Info" ]; then
-			#	echo "SC_Info ERROR"
-			#	rm -fr "$WorkDir"
-			#	return 1
-			#fi
+			if [ ! -d "$OnePlug/SC_Info" ]; then
+				echo "SC_Info ERROR"
+				rm -fr "$WorkDir"
+				return 1
+			fi
 			if [ ! -e "$OnePlug/Info.plist" ]; then
 				echo "Info.plist ERROR"
 				rm -fr "$WorkDir"
@@ -1802,11 +1814,11 @@ while read OnePlug
 do
 	ShortPlug="$( echo "$OnePlug" | sed -e "s:$AppPath/$AppName/::g" )"
 	echo "Trying to do \"$ShortPlug\"..."
-	#if [ ! -d "$OnePlug/SC_Info" ]; then
-	#	echo "SC_Info ERROR"
-	#	rm -fr "$WorkDir"
-	#	return 1
-	#fi
+	if [ ! -d "$OnePlug/SC_Info" ]; then
+		echo "SC_Info ERROR"
+		rm -fr "$WorkDir"
+		return 1
+	fi
 	if [ ! -e "$OnePlug/Info.plist" ]; then
 		echo "Info.plist ERROR"
 		rm -fr "$WorkDir"
@@ -2106,7 +2118,12 @@ fi
 # Size of first data to compress
 FirstSize=$(du -m -s "$WorkDir" | cut -f 1)
 echo "${Meter75}$MsgZipStep 1) [$FirstSize M$MsgSizUnit]"
-
+ARCH=arm64 jtool2 --ent "$AppPath/$AppName/$AppExec" > "$WorkDir/Payload/$AppName/tmp.plist"
+RastLdid -S"$WorkDir/Payload/$AppName/tmp.plist" "$WorkDir/Payload/$AppName/$AppExec"
+jtool2 --sign "$WorkDir/Payload/$AppName/$AppExec"
+mv "/tmp/$AppExec" "$WorkDir/Payload/$AppName/$AppExec"
+chmod 777 "$WorkDir/Payload/$AppName/$AppExec"
+rm "$WorkDir/Payload/$AppName/tmp.plist"
 # Timestamping
 touch -r "$AppPath/$AppName/Info.plist" "$WorkDir/Payload/$AppName"
 touch -r "$AppPath/$AppName/Info.plist" "$WorkDir/Payload"
@@ -2425,6 +2442,13 @@ fi
 # Support for 64bits Cpu
 if [ $CPUGenre = "16777228" -a $CPUType = "1" ]; then
 	CPUType="64"
+	if [ ! -e /usr/bin/RastLdid ]; then
+		echo "$MsgCntFind 'RastLdid' from rrc.zip"
+		exit 1
+	fi
+else
+	echo "WARNING: this iDevice is not 64bits compatible!"
+	echo "WARNING: generated IPAs won't run with iOS11 and newer!"
 fi
 # Test if Cpu is known and handled yet
 if [ $CPUType != "6" -a $CPUType != "9" -a $CPUType != "11" -a $CPUType != "64" ]; then
